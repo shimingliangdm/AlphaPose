@@ -16,14 +16,24 @@ class WebCamDetectionLoader():
         self.cfg = cfg
         self.opt = opt
 
-        stream = cv2.VideoCapture(int(input_source))
-        assert stream.isOpened(), 'Cannot capture source'
-        self.path = input_source
-        self.fourcc = int(stream.get(cv2.CAP_PROP_FOURCC))
-        self.fps = stream.get(cv2.CAP_PROP_FPS)
-        self.frameSize = (int(stream.get(cv2.CAP_PROP_FRAME_WIDTH)), int(stream.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-        self.videoinfo = {'fourcc': self.fourcc, 'fps': self.fps, 'frameSize': self.frameSize}
-        stream.release()
+        stream_0 = cv2.VideoCapture(0, cv2.CAP_V4L2)
+        assert stream_0.isOpened(), 'Cannot capture source'
+        self.path_0 = 0
+        self.fourcc_0 = int(stream_0.get(cv2.CAP_PROP_FOURCC))
+        self.fps_0 = stream_0.get(cv2.CAP_PROP_FPS)
+        self.frameSize_0 = (int(stream_0.get(cv2.CAP_PROP_FRAME_WIDTH)), int(stream_0.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+        self.videoinfo_0 = {'fourcc': self.fourcc_0, 'fps': self.fps_0, 'frameSize': self.frameSize_0}
+        stream_0.release()
+
+        stream_1 = cv2.VideoCapture(2, cv2.CAP_V4L2)
+        assert stream_1.isOpened(), 'Cannot capture source'
+        self.path_1 = 2
+        self.fourcc_1 = int(stream_1.get(cv2.CAP_PROP_FOURCC))
+        self.fps_1 = stream_1.get(cv2.CAP_PROP_FPS)
+        self.frameSize_1 = (int(stream_1.get(cv2.CAP_PROP_FRAME_WIDTH)), int(stream_1.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+        self.videoinfo_1 = {'fourcc': self.fourcc_1, 'fps': self.fps_1, 'frameSize': self.frameSize_1}
+        stream_1.release()
+
 
         self.detector = detector
 
@@ -66,10 +76,12 @@ class WebCamDetectionLoader():
         """
         if opt.sp:
             self._stopped = False
-            self.pose_queue = Queue(maxsize=queueSize)
+            self.pose_queue_0 = Queue(maxsize=queueSize)
+            self.pose_queue_1 = Queue(maxsize=queueSize)
         else:
             self._stopped = mp.Value('b', False)
-            self.pose_queue = mp.Queue(maxsize=queueSize)
+            self.pose_queue_0 = mp.Queue(maxsize=queueSize)
+            self.pose_queue_1 = mp.Queue(maxsize=queueSize)
 
     def start_worker(self, target):
         if self.opt.sp:
@@ -97,7 +109,8 @@ class WebCamDetectionLoader():
         self.stop()
 
     def clear_queues(self):
-        self.clear(self.pose_queue)
+        self.clear(self.pose_queue_0)
+        self.clear(self.pose_queue_1)
 
     def clear(self, queue):
         while not queue.empty():
@@ -111,45 +124,78 @@ class WebCamDetectionLoader():
         if not self.stopped:
             return queue.get()
 
+    def IsQueueEmpty_0(self):
+        if self.pose_queue_0.empty():
+            return True
+        else:
+            return False
+
+    def IsQueueEmpty_1(self):
+        if self.pose_queue_1.empty():
+            return True
+        else:
+            return False
+
     def frame_preprocess(self):
-        stream = cv2.VideoCapture(self.path)
-        assert stream.isOpened(), 'Cannot capture source'
+        stream_0 = cv2.VideoCapture(self.path_0, cv2.CAP_V4L2)
+        stream_1 = cv2.VideoCapture(self.path_1, cv2.CAP_V4L2)
+        assert stream_0.isOpened(), 'Cannot capture source 0'
+        assert stream_1.isOpened(), 'Cannot capture source 1'
 
         # keep looping infinitely
         for i in count():
             if self.stopped:
-                stream.release()
+                stream_0.release()
+                stream_1.release()
                 return
-            if not self.pose_queue.full():
+            if (not self.pose_queue_0.full()) and (not self.pose_queue_1.full()):
                 # otherwise, ensure the queue has room in it
-                (grabbed, frame) = stream.read()
+                (grabbed_0, frame_0) = stream_0.read()
+                (grabbed_1, frame_1) = stream_1.read()
                 # if the `grabbed` boolean is `False`, then we have
                 # reached the end of the video file
-                if not grabbed:
-                    self.wait_and_put(self.pose_queue, (None, None, None, None, None, None, None))
-                    stream.release()
+                if not grabbed_0 or not grabbed_1:
+                    self.wait_and_put(self.pose_queue_0, (None, None, None, None, None, None, None))
+                    self.wait_and_put(self.pose_queue_1, (None, None, None, None, None, None, None))
+                    stream_0.release()
+                    stream_1.release()
                     return
 
                 # expected frame shape like (1,3,h,w) or (3,h,w)
-                img_k = self.detector.image_preprocess(frame)
+                img_k_0 = self.detector.image_preprocess(frame_0)
+                img_k_1 = self.detector.image_preprocess(frame_1)
 
-                if isinstance(img_k, np.ndarray):
-                    img_k = torch.from_numpy(img_k)
+                if isinstance(img_k_0, np.ndarray):
+                    img_k_0 = torch.from_numpy(img_k_0)
                 # add one dimension at the front for batch if image shape (3,h,w)
-                if img_k.dim() == 3:
-                    img_k = img_k.unsqueeze(0)
+                if img_k_0.dim() == 3:
+                    img_k_0 = img_k_0.unsqueeze(0)
 
-                im_dim_list_k = frame.shape[1], frame.shape[0]
+                if isinstance(img_k_1, np.ndarray):
+                    img_k_1 = torch.from_numpy(img_k_1)
+                if img_k_1.dim() == 3:
+                    img_k_1 = img_k_1.unsqueeze(0)
 
-                orig_img = frame[:, :, ::-1]
-                im_name = str(i) + '.jpg'
+                im_dim_list_k_0 = frame_0.shape[1], frame_0.shape[0]
+                im_dim_list_k_1 = frame_1.shape[1], frame_1.shape[0]
+
+                orig_img_0 = frame_0[:, :, ::-1]
+                orig_img_1 = frame_1[:, :, ::-1]
+                im_name_0 = str(i) + '_0' + '.jpg'
+                im_name_1 = str(i) + '_1' + '.jpg'
                 # im_dim_list = im_dim_list_k
 
                 with torch.no_grad():
                     # Record original image resolution
-                    im_dim_list_k = torch.FloatTensor(im_dim_list_k).repeat(1, 2)
-                img_det = self.image_detection((img_k, orig_img, im_name, im_dim_list_k))
-                self.image_postprocess(img_det)
+                    im_dim_list_k_0 = torch.FloatTensor(im_dim_list_k_0).repeat(1, 2)
+                with torch.no_grad():
+                    # Record original image resolution
+                    im_dim_list_k_1 = torch.FloatTensor(im_dim_list_k_1).repeat(1, 2)
+
+                img_det_0 = self.image_detection((img_k_0, orig_img_0, im_name_0, im_dim_list_k_0))
+                img_det_1 = self.image_detection((img_k_1, orig_img_1, im_name_1, im_dim_list_k_1))
+                self.image_postprocess_0(img_det_0)
+                self.image_postprocess_1(img_det_1)
 
     def image_detection(self, inputs):
         img, orig_img, im_name, im_dim_list = inputs
@@ -177,14 +223,14 @@ class WebCamDetectionLoader():
         cropped_boxes = torch.zeros(boxes_k.size(0), 4)
         return (orig_img, im_name, boxes_k, scores[dets[:, 0] == 0], ids[dets[:, 0] == 0], inps, cropped_boxes)
 
-    def image_postprocess(self, inputs):
+    def image_postprocess_0(self, inputs):
         with torch.no_grad():
             (orig_img, im_name, boxes, scores, ids, inps, cropped_boxes) = inputs
             if orig_img is None or self.stopped:
-                self.wait_and_put(self.pose_queue, (None, None, None, None, None, None, None))
+                self.wait_and_put(self.pose_queue_0, (None, None, None, None, None, None, None))
                 return
             if boxes is None or boxes.nelement() == 0:
-                self.wait_and_put(self.pose_queue, (None, orig_img, im_name, boxes, scores, ids, None))
+                self.wait_and_put(self.pose_queue_0, (None, orig_img, im_name, boxes, scores, ids, None))
                 return
             # imght = orig_img.shape[0]
             # imgwidth = orig_img.shape[1]
@@ -194,10 +240,32 @@ class WebCamDetectionLoader():
 
             # inps, cropped_boxes = self.transformation.align_transform(orig_img, boxes)
 
-            self.wait_and_put(self.pose_queue, (inps, orig_img, im_name, boxes, scores, ids, cropped_boxes))
+            self.wait_and_put(self.pose_queue_0, (inps, orig_img, im_name, boxes, scores, ids, cropped_boxes))
 
-    def read(self):
-        return self.wait_and_get(self.pose_queue)
+    def image_postprocess_1(self, inputs):
+        with torch.no_grad():
+            (orig_img, im_name, boxes, scores, ids, inps, cropped_boxes) = inputs
+            if orig_img is None or self.stopped:
+                self.wait_and_put(self.pose_queue_1, (None, None, None, None, None, None, None))
+                return
+            if boxes is None or boxes.nelement() == 0:
+                self.wait_and_put(self.pose_queue_1, (None, orig_img, im_name, boxes, scores, ids, None))
+                return
+            # imght = orig_img.shape[0]
+            # imgwidth = orig_img.shape[1]
+            for i, box in enumerate(boxes):
+                inps[i], cropped_box = self.transformation.test_transform(orig_img, box)
+                cropped_boxes[i] = torch.FloatTensor(cropped_box)
+
+            # inps, cropped_boxes = self.transformation.align_transform(orig_img, boxes)
+
+            self.wait_and_put(self.pose_queue_1, (inps, orig_img, im_name, boxes, scores, ids, cropped_boxes))
+
+    def read_0(self):
+        return self.wait_and_get(self.pose_queue_0)
+
+    def read_1(self):
+        return self.wait_and_get(self.pose_queue_1)
 
     @property
     def stopped(self):

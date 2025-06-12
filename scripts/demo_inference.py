@@ -205,9 +205,11 @@ if __name__ == "__main__":
         else:
             video_save_opt['savepath'] = os.path.join(args.outputpath, 'AlphaPose_webcam' + str(input_source) + '.mp4')
         video_save_opt.update(det_loader.videoinfo)
-        writer = DataWriter(cfg, args, save_video=True, video_save_opt=video_save_opt, queueSize=queueSize).start()
+        writer_0 = DataWriter(cfg, args, save_video=True, video_save_opt=video_save_opt, queueSize=queueSize, inCameraIndex=0).start()
+        writer_1 = DataWriter(cfg, args, save_video=True, video_save_opt=video_save_opt, queueSize=queueSize, inCameraIndex=1).start()
     else:
-        writer = DataWriter(cfg, args, save_video=False, queueSize=queueSize).start()
+        writer_0 = DataWriter(cfg, args, save_video=False, queueSize=queueSize, inCameraIndex=0).start()
+        writer_1 = DataWriter(cfg, args, save_video=False, queueSize=queueSize, inCameraIndex=1).start()
 
     if mode == 'webcam':
         print('Starting webcam demo, press Ctrl + C to terminate...')
@@ -224,43 +226,84 @@ if __name__ == "__main__":
         for i in im_names_desc:
             start_time = getTime()
             with torch.no_grad():
-                (inps, orig_img, im_name, boxes, scores, ids, cropped_boxes) = det_loader.read()
-                if orig_img is None:
-                    break
-                if boxes is None or boxes.nelement() == 0:
-                    writer.save(None, None, None, None, None, orig_img, im_name)
-                    continue
-                if args.profile:
-                    ckpt_time, det_time = getTime(start_time)
-                    runtime_profile['dt'].append(det_time)
-                # Pose Estimation
-                inps = inps.to(args.device)
-                datalen = inps.size(0)
-                leftover = 0
-                if (datalen) % batchSize:
-                    leftover = 1
-                num_batches = datalen // batchSize + leftover
-                hm = []
-                for j in range(num_batches):
-                    inps_j = inps[j * batchSize:min((j + 1) * batchSize, datalen)]
-                    if args.flip:
-                        inps_j = torch.cat((inps_j, flip(inps_j)))
-                    hm_j = pose_model(inps_j)
-                    if args.flip:
-                        hm_j_flip = flip_heatmap(hm_j[int(len(hm_j) / 2):], pose_dataset.joint_pairs, shift=True)
-                        hm_j = (hm_j[0:int(len(hm_j) / 2)] + hm_j_flip) / 2
-                    hm.append(hm_j)
-                hm = torch.cat(hm)
-                if args.profile:
-                    ckpt_time, pose_time = getTime(ckpt_time)
-                    runtime_profile['pt'].append(pose_time)
-                if args.pose_track:
-                    boxes,scores,ids,hm,cropped_boxes = track(tracker,args,orig_img,inps,boxes,hm,cropped_boxes,im_name,scores)
-                hm = hm.cpu()
-                writer.save(boxes, scores, ids, hm, cropped_boxes, orig_img, im_name)
-                if args.profile:
-                    ckpt_time, post_time = getTime(ckpt_time)
-                    runtime_profile['pn'].append(post_time)
+                if not det_loader.IsQueueEmpty_0():
+                    (inps, orig_img, im_name, boxes, scores, ids, cropped_boxes) = det_loader.read_0()
+                    if orig_img is None:
+                        break
+                    if boxes is None or boxes.nelement() == 0:
+                        writer_0.save(None, None, None, None, None, orig_img, im_name, 0)
+                        continue
+                    if args.profile:
+                        ckpt_time, det_time = getTime(start_time)
+                        runtime_profile['dt'].append(det_time)
+                    # Pose Estimation
+                    inps = inps.to(args.device)
+                    datalen = inps.size(0)
+                    leftover = 0
+                    if (datalen) % batchSize:
+                        leftover = 1
+                    num_batches = datalen // batchSize + leftover
+                    hm = []
+                    for j in range(num_batches):
+                        inps_j = inps[j * batchSize:min((j + 1) * batchSize, datalen)]
+                        if args.flip:
+                            inps_j = torch.cat((inps_j, flip(inps_j)))
+                        hm_j = pose_model(inps_j)
+                        if args.flip:
+                            hm_j_flip = flip_heatmap(hm_j[int(len(hm_j) / 2):], pose_dataset.joint_pairs, shift=True)
+                            hm_j = (hm_j[0:int(len(hm_j) / 2)] + hm_j_flip) / 2
+                        hm.append(hm_j)
+                    hm = torch.cat(hm)
+                    if args.profile:
+                        ckpt_time, pose_time = getTime(ckpt_time)
+                        runtime_profile['pt'].append(pose_time)
+                    if args.pose_track:
+                        boxes,scores,ids,hm,cropped_boxes = track(tracker,args,orig_img,inps,boxes,hm,cropped_boxes,im_name,scores)
+                    hm = hm.cpu()
+                    writer_0.save(boxes, scores, ids, hm, cropped_boxes, orig_img, im_name, 0)
+                    if args.profile:
+                        ckpt_time, post_time = getTime(ckpt_time)
+                        runtime_profile['pn'].append(post_time)
+
+
+                if not det_loader.IsQueueEmpty_1():
+                    (inps, orig_img, im_name, boxes, scores, ids, cropped_boxes) = det_loader.read_1()
+                    if orig_img is None:
+                        break
+                    if boxes is None or boxes.nelement() == 0:
+                        writer_1.save(None, None, None, None, None, orig_img, im_name, 1)
+                        continue
+                    if args.profile:
+                        ckpt_time, det_time = getTime(start_time)
+                        runtime_profile['dt'].append(det_time)
+                    # Pose Estimation
+                    inps = inps.to(args.device)
+                    datalen = inps.size(0)
+                    leftover = 0
+                    if (datalen) % batchSize:
+                        leftover = 1
+                    num_batches = datalen // batchSize + leftover
+                    hm = []
+                    for j in range(num_batches):
+                        inps_j = inps[j * batchSize:min((j + 1) * batchSize, datalen)]
+                        if args.flip:
+                            inps_j = torch.cat((inps_j, flip(inps_j)))
+                        hm_j = pose_model(inps_j)
+                        if args.flip:
+                            hm_j_flip = flip_heatmap(hm_j[int(len(hm_j) / 2):], pose_dataset.joint_pairs, shift=True)
+                            hm_j = (hm_j[0:int(len(hm_j) / 2)] + hm_j_flip) / 2
+                        hm.append(hm_j)
+                    hm = torch.cat(hm)
+                    if args.profile:
+                        ckpt_time, pose_time = getTime(ckpt_time)
+                        runtime_profile['pt'].append(pose_time)
+                    if args.pose_track:
+                        boxes,scores,ids,hm,cropped_boxes = track(tracker,args,orig_img,inps,boxes,hm,cropped_boxes,im_name,scores)
+                    hm = hm.cpu()
+                    writer_1.save(boxes, scores, ids, hm, cropped_boxes, orig_img, im_name, 1)
+                    if args.profile:
+                        ckpt_time, post_time = getTime(ckpt_time)
+                        runtime_profile['pn'].append(post_time)
 
             if args.profile:
                 # TQDM
@@ -269,10 +312,16 @@ if __name__ == "__main__":
                         dt=np.mean(runtime_profile['dt']), pt=np.mean(runtime_profile['pt']), pn=np.mean(runtime_profile['pn']))
                 )
         print_finish_info()
-        while(writer.running()):
+        while(writer_0.running()):
             time.sleep(1)
-            print('===========================> Rendering remaining ' + str(writer.count()) + ' images in the queue...', end='\r')
-        writer.stop()
+            print('===========================> Rendering remaining ' + str(writer_0.count()) + ' images in the queue...', end='\r')
+        writer_0.stop()
+
+        while(writer_1.running()):
+            time.sleep(1)
+            print('===========================> Rendering remaining ' + str(writer_1.count()) + ' images in the queue...', end='\r')
+        writer_1.stop()
+
         det_loader.stop()
     except Exception as e:
         print(repr(e))
@@ -283,15 +332,23 @@ if __name__ == "__main__":
         # Thread won't be killed when press Ctrl+C
         if args.sp:
             det_loader.terminate()
-            while(writer.running()):
+            while(writer_0.running()):
                 time.sleep(1)
-                print('===========================> Rendering remaining ' + str(writer.count()) + ' images in the queue...', end='\r')
-            writer.stop()
+                print('===========================> Rendering remaining ' + str(writer_0.count()) + ' images in the queue...', end='\r')
+            writer_0.stop()
+
+            while(writer_1.running()):
+                time.sleep(1)
+                print('===========================> Rendering remaining ' + str(writer_1.count()) + ' images in the queue...', end='\r')
+            writer_1.stop()
         else:
             # subprocesses are killed, manually clear queues
 
             det_loader.terminate()
-            writer.terminate()
-            writer.clear_queues()
+            writer_0.terminate()
+            writer_0.clear_queues()
+
+            writer_1.terminate()
+            writer_1.clear_queues()
             det_loader.clear_queues()
 

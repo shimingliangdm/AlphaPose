@@ -11,6 +11,11 @@ import torch.multiprocessing as mp
 from alphapose.utils.transforms import get_func_heatmap_to_coord
 from alphapose.utils.pPose_nms import pose_nms, write_json
 
+import requests
+import json
+
+import random
+
 DEFAULT_VIDEO_SAVE_OPT = {
     'savepath': 'examples/res/1.mp4',
     'fourcc': cv2.VideoWriter_fourcc(*'mp4v'),
@@ -20,11 +25,17 @@ DEFAULT_VIDEO_SAVE_OPT = {
 
 EVAL_JOINTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 
+JiuShiTokenExpireTime = 10000
+JiuShiStopTime = 5
+JiuShiCommonSoundTime = 2
+
+Sounds = ["买一个啦", "天气太热，买瓶可乐", "别看了，买一个吧", "好东西就得买", "我有好吃的，也有好喝的"]
+CommandSounds = ["我是一台售货车哦", "我有零食", "我有可乐"]
 
 class DataWriter():
     def __init__(self, cfg, opt, save_video=False,
                  video_save_opt=DEFAULT_VIDEO_SAVE_OPT,
-                 queueSize=1024):
+                 queueSize=1024, inCameraIndex = -1):
         self.cfg = cfg
         self.opt = opt
         self.video_save_opt = video_save_opt
@@ -32,6 +43,14 @@ class DataWriter():
         self.eval_joints = EVAL_JOINTS
         self.save_video = save_video
         self.heatmap_to_coord = get_func_heatmap_to_coord(cfg)
+        self.camera_idx = inCameraIndex
+        self.curJiuShiTokenTime = JiuShiTokenExpireTime
+        self.jiushiToken = ""
+        self.lastRecordTime = 0
+        self.isStopping = False
+        self.accStopTime = 0.0
+        self.accCommonSoundTime = 0.0
+        self.stopSignal = False
         # initialize the queue used to store frames read from
         # the video file
         if opt.sp:
@@ -47,7 +66,7 @@ class DataWriter():
             from trackers.PoseFlow.poseflow_infer import PoseFlowWrapper
             self.pose_flow_wrapper = PoseFlowWrapper(save_path=os.path.join(opt.outputpath, 'poseflow'))
 
-        if self.opt.save_img or self.save_video or self.opt.vis:
+        if self.opt.save_img or self.save_video or self.opt.vis or self.opt.vis_fast:
             loss_type = self.cfg.DATA_PRESET.get('LOSS_TYPE', 'MSELoss')
             num_joints = self.cfg.DATA_PRESET.NUM_JOINTS
             if loss_type == 'MSELoss':
@@ -77,6 +96,97 @@ class DataWriter():
         self.result_worker = self.start_worker(self.update)
         return self
 
+    def GetJiuShiToken(self):
+        if self.curJiuShiTokenTime >= JiuShiTokenExpireTime:
+            url = "https://auth.zelostech.com.cn/app/accessToken"
+            body = {
+                "appId": "oc6999f41e0b6464baebe88c26124c59d",
+                "appKey": "ZmFjMDRmZjgtYWE5Yi00MDQ0LWJmODYtNGMxNTc4ZmVlOTUz"
+            }
+
+            headers = {"Content-Type": "application/json"}
+            response = requests.post(url, data=json.dumps(body), headers=headers)
+            parseJsonData = response.json()
+            try:
+                token = parseJsonData['data']['token']
+                self.jiushiToken = token
+                print("Token:", token)
+            except KeyError as e:
+                print(f"token is lost: {e}")
+            self.curJiuShiTokenTime = 0
+        else:
+            self.curJiuShiTokenTime += 1
+
+    def TellJiuShiStop(self):
+        url = "https://gateway.zelostech.com.cn/business-server/open-apis/vehicle/command"
+        body = {
+            "vehicleName": "ZL01351",
+            "commandType": "EMERGENCY_STOP",
+            "userId": "15",
+            "userName": "testUser",
+            "source": "34b5c696d54941e217938c590d45b598"
+        }
+
+        headers = {"Content-Type": "application/json", 
+            "token":self.jiushiToken
+        }
+        response = requests.post(url, data=json.dumps(body), headers=headers)
+        print(response.status_code)
+        print(response.json())
+
+    def TellJiuShiRecovery(self):
+        url = "https://gateway.zelostech.com.cn/business-server/open-apis/vehicle/command"
+        body = {
+            "vehicleName": "ZL01351",
+            "commandType": "RECOVERY",
+            "userId": "15",
+            "userName": "testUser",
+            "source": "34b5c696d54941e217938c590d45b598"
+        }
+
+        headers = {"Content-Type": "application/json", 
+            "token":self.jiushiToken
+        }
+        response = requests.post(url, data=json.dumps(body), headers=headers)
+        print(response.status_code)
+        print(response.json())
+
+    def TellJiuShiSound(self):
+        randInt = random.randrange(0, 5)
+        randSound = Sounds[randInt]
+        url = "https://gateway.zelostech.com.cn/business-server/open-apis/vehicle/sound_and_show"
+        body = {
+            "vehicleName": "ZL01351",
+            "sound": randSound,
+            "show": "买买买",
+            "showDuration": "10"
+        }
+
+        headers = {"Content-Type": "application/json", 
+            "token":self.jiushiToken
+        }
+        response = requests.post(url, data=json.dumps(body), headers=headers)
+        print(response.status_code)
+        print(response.json())
+
+    def TellJiuShiCommandSound(self):
+        randInt = random.randrange(0, 3)
+        randSound = CommandSounds[randInt]
+        url = "https://gateway.zelostech.com.cn/business-server/open-apis/vehicle/sound_and_show"
+        body = {
+            "vehicleName": "ZL01351",
+            "sound": randSound,
+            "show": "买买买",
+            "showDuration": "10"
+        }
+
+        headers = {"Content-Type": "application/json", 
+            "token":self.jiushiToken
+        }
+        response = requests.post(url, data=json.dumps(body), headers=headers)
+        print(response.status_code)
+        print(response.json())
+
     def update(self):
         final_result = []
         norm_type = self.cfg.LOSS.get('NORM_TYPE', None)
@@ -94,8 +204,48 @@ class DataWriter():
             assert stream.isOpened(), 'Cannot open video for writing'
         # keep looping infinitelyd
         while True:
+            self.GetJiuShiToken()
+
+            curTime = time.time()
+            if self.isStopping:
+                if self.lastRecordTime != 0:
+                    deltaTime = curTime - self.lastRecordTime
+                    self.accStopTime += deltaTime
+                    self.lastRecordTime = curTime
+
+                    if self.accStopTime >= JiuShiStopTime:
+                        # which means it has excceeded max waiting time
+                        print("trigger recovery")
+                        self.TellJiuShiRecovery()
+                        self.accStopTime = 0.0
+                        self.accCommonSoundTime = 0.0
+                        self.isStopping = False
+                self.lastRecordTime = curTime
+            else:
+                if self.lastRecordTime != 0:
+                    deltaTime = curTime - self.lastRecordTime
+                    self.accCommonSoundTime += deltaTime
+                    self.lastRecordTime = curTime
+
+                    if self.accCommonSoundTime >= JiuShiCommonSoundTime:
+                        # which means it has excceeded max waiting time
+                        print("trigger command sound")
+                        self.TellJiuShiCommandSound()
+                        self.accCommonSoundTime = 0.0
+                self.lastRecordTime = curTime
+
+            if self.stopSignal:
+                if self.isStopping == False:
+                    print("trigger stop")
+                    self.TellJiuShiStop()
+                    self.TellJiuShiSound()
+                self.isStopping = True
+                self.accStopTime = 0.0
+                self.stopSignal = False
+                self.accCommonSoundTime = 0.0
+
             # ensure the queue is not empty and get item
-            (boxes, scores, ids, hm_data, cropped_boxes, orig_img, im_name) = self.wait_and_get(self.result_queue)
+            (boxes, scores, ids, hm_data, cropped_boxes, orig_img, im_name, camera_idx) = self.wait_and_get(self.result_queue)
             if orig_img is None:
                 # if the thread indicator variable is set (img is None), stop the thread
                 if self.save_video:
@@ -147,6 +297,76 @@ class DataWriter():
 
                 _result = []
                 for k in range(len(scores)):
+                    if camera_idx == 0 and len(preds_scores[k]) > 18:
+                        conf0 = preds_scores[k][0]
+                        conf1 = preds_scores[k][1]
+                        conf2 = preds_scores[k][2]
+                        conf3 = preds_scores[k][3]
+                        conf4 = preds_scores[k][4]
+
+                        conf5 = preds_scores[k][5]
+                        conf7 = preds_scores[k][7]
+                        conf9 = preds_scores[k][9]
+
+                        conf6 = preds_scores[k][6]
+                        conf8 = preds_scores[k][8]
+                        conf10 = preds_scores[k][10]
+
+                        conf18 = preds_scores[k][18]
+
+
+                        x0, y0 = preds_img[k][0]
+
+                        x1, y1 = preds_img[k][1]
+                        x2, y2 = preds_img[k][2]
+                        x3, y3 = preds_img[k][3]
+                        x4, y4 = preds_img[k][4]
+
+                        x5, y5 = preds_img[k][5]
+                        x7, y7 = preds_img[k][7]
+                        x9, y9 = preds_img[k][9]
+
+                        x6, y6 = preds_img[k][6]
+                        x8, y8 = preds_img[k][8]
+                        x10, y10 = preds_img[k][10]
+
+                        x18, y18 = preds_img[k][18]
+
+                        if conf0 > 0.4 and conf1 > 0.4 and conf2 > 0.4 and conf3 > 0.4 and conf4 > 0.4 and conf18 > 0.4:
+                            v018 = [x18 - x0, y18 - y0]
+                            v12 = [x1 - x2, y1 - y2]
+                            v13 = [x1 - x3, y1 - y3]
+                            v24 = [x2 - x4, y2 - y4]
+                            len018 = np.linalg.norm(v018)
+                            len12 = np.linalg.norm(v12)
+                            len13 = np.linalg.norm(v13)
+                            len24 = np.linalg.norm(v24)
+                            if len018 > 65:
+                                #print("which means some is closed")
+                                self.stopSignal = True
+
+                            # len018 to tell global distance
+                            # len12 to tell partial facial direction
+                            if len018 > 25 and len018 / len12 < 2:
+                                ratio = len018 / len12
+                                #print("someone is closed and look: " + str(ratio))
+                                self.stopSignal = True
+
+                        if (conf5 > 0.4 and conf7 > 0.4):
+                            v75 = [x7 - x5, y7 - y5]
+                            len75 = np.linalg.norm(v75)
+                            if len75 > 25 and y9 < y5:
+                                #print("someone is waving left hand")
+                                self.stopSignal = True
+
+                        if (conf6 > 0.4 and conf8 > 0.4):
+                            v86 = [x8 - x6, y8 - y6]
+                            len86 = np.linalg.norm(v86)
+                            if len86 > 25 and y10 < y6:
+                                #print("someone is waving right hand")
+                                self.stopSignal = True
+
+
                     _result.append(
                         {
                             'keypoints':preds_img[k],
@@ -161,6 +381,11 @@ class DataWriter():
                     'imgname': im_name,
                     'result': _result
                 }
+
+                from alphapose.utils.vis import vis_frame_fast as vis_frame
+                testimg = vis_frame(orig_img, result, self.opt, self.vis_thres)
+                imgname = "kkk" + str(camera_idx) + ".jpg"
+                cv2.imwrite(imgname, testimg)
 
 
                 if self.opt.pose_flow:
@@ -181,7 +406,7 @@ class DataWriter():
 
     def write_image(self, img, im_name, stream=None):
         if self.opt.vis:
-            cv2.imshow("AlphaPose Demo", img)
+            cv2.imshow("AlphaPose Demo" + str(self.camera_idx), img)
             cv2.waitKey(30)
         if self.opt.save_img:
             cv2.imwrite(os.path.join(self.opt.outputpath, 'vis', im_name), img)
@@ -194,9 +419,9 @@ class DataWriter():
     def wait_and_get(self, queue):
         return queue.get()
 
-    def save(self, boxes, scores, ids, hm_data, cropped_boxes, orig_img, im_name):
+    def save(self, boxes, scores, ids, hm_data, cropped_boxes, orig_img, im_name, camera_idx = 0):
         # save next frame in the queue
-        self.wait_and_put(self.result_queue, (boxes, scores, ids, hm_data, cropped_boxes, orig_img, im_name))
+        self.wait_and_put(self.result_queue, (boxes, scores, ids, hm_data, cropped_boxes, orig_img, im_name, camera_idx))
 
     def running(self):
         # indicate that the thread is still running
