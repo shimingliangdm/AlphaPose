@@ -169,6 +169,23 @@ class DataWriter():
         print(response.status_code)
         print(response.json())
 
+    def TellJiuShiInitCommandSound(self):
+        sound = "图像识别已开启"
+        url = "https://gateway.zelostech.com.cn/business-server/open-apis/vehicle/sound_and_show"
+        body = {
+            "vehicleName": "ZL01351",
+            "sound": sound,
+            "show": "检测开启",
+            "showDuration": "3"
+        }
+
+        headers = {"Content-Type": "application/json", 
+            "token":self.jiushiToken
+        }
+        response = requests.post(url, data=json.dumps(body), headers=headers)
+        print(response.status_code)
+        print(response.json())
+
     def TellJiuShiCommandSound(self):
         randInt = random.randrange(0, 3)
         randSound = CommandSounds[randInt]
@@ -203,8 +220,10 @@ class DataWriter():
                 stream = cv2.VideoWriter(*[self.video_save_opt[k] for k in ['savepath', 'fourcc', 'fps', 'frameSize']])
             assert stream.isOpened(), 'Cannot open video for writing'
         # keep looping infinitelyd
+        #self.GetJiuShiToken()
+        #self.TellJiuShiInitCommandSound()
         while True:
-            self.GetJiuShiToken()
+            #self.GetJiuShiToken()
 
             curTime = time.time()
             if self.isStopping:
@@ -216,7 +235,7 @@ class DataWriter():
                     if self.accStopTime >= JiuShiStopTime:
                         # which means it has excceeded max waiting time
                         print("trigger recovery")
-                        self.TellJiuShiRecovery()
+                        #self.TellJiuShiRecovery()
                         self.accStopTime = 0.0
                         self.accCommonSoundTime = 0.0
                         self.isStopping = False
@@ -230,15 +249,15 @@ class DataWriter():
                     if self.accCommonSoundTime >= JiuShiCommonSoundTime:
                         # which means it has excceeded max waiting time
                         print("trigger command sound")
-                        self.TellJiuShiCommandSound()
+                        #self.TellJiuShiCommandSound()
                         self.accCommonSoundTime = 0.0
                 self.lastRecordTime = curTime
 
             if self.stopSignal:
                 if self.isStopping == False:
                     print("trigger stop")
-                    self.TellJiuShiStop()
-                    self.TellJiuShiSound()
+                    #self.TellJiuShiStop()
+                    #self.TellJiuShiSound()
                 self.isStopping = True
                 self.accStopTime = 0.0
                 self.stopSignal = False
@@ -297,7 +316,7 @@ class DataWriter():
 
                 _result = []
                 for k in range(len(scores)):
-                    if camera_idx == 0 and len(preds_scores[k]) > 18:
+                    if (camera_idx == 0 or camera_idx == 1) and len(preds_scores[k]) > 18:
                         conf0 = preds_scores[k][0]
                         conf1 = preds_scores[k][1]
                         conf2 = preds_scores[k][2]

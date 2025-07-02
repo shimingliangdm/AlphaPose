@@ -8,6 +8,8 @@ import numpy as np
 import torch
 import torch.multiprocessing as mp
 
+import glob
+
 from alphapose.utils.presets import SimpleTransform, SimpleTransform3DSMPL
 
 
@@ -16,18 +18,30 @@ class WebCamDetectionLoader():
         self.cfg = cfg
         self.opt = opt
 
-        stream_0 = cv2.VideoCapture(0, cv2.CAP_V4L2)
+        video_devices = glob.glob("/dev/video[0-9]")
+        video_indices = []
+        for device in video_devices:
+            try:
+                indice =int(device.split('/dev/video')[-1])
+                video_indices.append(indice)
+            except ValueError:
+                continue
+
+        sorted(video_indices)
+        print(video_indices)
+
+        stream_0 = cv2.VideoCapture(video_indices[3], cv2.CAP_V4L2)
         assert stream_0.isOpened(), 'Cannot capture source'
-        self.path_0 = 0
+        self.path_0 = video_indices[3]
         self.fourcc_0 = int(stream_0.get(cv2.CAP_PROP_FOURCC))
         self.fps_0 = stream_0.get(cv2.CAP_PROP_FPS)
         self.frameSize_0 = (int(stream_0.get(cv2.CAP_PROP_FRAME_WIDTH)), int(stream_0.get(cv2.CAP_PROP_FRAME_HEIGHT)))
         self.videoinfo_0 = {'fourcc': self.fourcc_0, 'fps': self.fps_0, 'frameSize': self.frameSize_0}
         stream_0.release()
 
-        stream_1 = cv2.VideoCapture(2, cv2.CAP_V4L2)
+        stream_1 = cv2.VideoCapture(video_indices[1], cv2.CAP_V4L2)
         assert stream_1.isOpened(), 'Cannot capture source'
-        self.path_1 = 2
+        self.path_1 = video_indices[1]
         self.fourcc_1 = int(stream_1.get(cv2.CAP_PROP_FOURCC))
         self.fps_1 = stream_1.get(cv2.CAP_PROP_FPS)
         self.frameSize_1 = (int(stream_1.get(cv2.CAP_PROP_FRAME_WIDTH)), int(stream_1.get(cv2.CAP_PROP_FRAME_HEIGHT)))
