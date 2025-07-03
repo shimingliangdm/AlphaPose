@@ -205,5 +205,42 @@ class jiushicommunication():
         self.TellJiuShiInitCommandSound()
         while True:
             #self.GetJiuShiToken()
+            curTime = time.time()
+            if self.isStopping:
+                if self.lastRecordTime != 0:
+                    deltaTime = curTime - self.lastRecordTime
+                    self.accStopTime += deltaTime
+                    self.lastRecordTime = curTime
+
+                    if self.accStopTime >= JiuShiStopTime:
+                        # which means it has excceeded max waiting time
+                        print("trigger recovery")
+                        self.TellJiuShiCommandRecoverySide()
+                        self.accStopTime = 0.0
+                        self.accCommonSoundTime = 0.0
+                        self.isStopping = False
+                self.lastRecordTime = curTime
+            else:
+                if self.lastRecordTime != 0:
+                    deltaTime = curTime - self.lastRecordTime
+                    self.accCommonSoundTime += deltaTime
+                    self.lastRecordTime = curTime
+
+                    if self.accCommonSoundTime >= JiuShiCommonSoundTime:
+                        # which means it has excceeded max waiting time
+                        print("trigger command sound")
+                        self.TellJiuShiCommandSound()
+                        self.accCommonSoundTime = 0.0
+                self.lastRecordTime = curTime
+
+            if self.stopSignal:
+                if self.isStopping == False:
+                    print("trigger stop")
+                    self.TellJiuShiCommandStopSide()
+                    self.TellJiuShiSound()
+                self.isStopping = True
+                self.accStopTime = 0.0
+                self.stopSignal = False
+                self.accCommonSoundTime = 0.0
 
     
