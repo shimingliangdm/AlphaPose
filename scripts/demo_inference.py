@@ -22,6 +22,7 @@ from alphapose.utils.transforms import flip, flip_heatmap
 from alphapose.utils.vis import getTime
 from alphapose.utils.webcam_detector import WebCamDetectionLoader
 from alphapose.utils.writer import DataWriter
+from alphapose.utils.jiushicommunication import jiushicommunication
 
 """----------------------------- Demo options -----------------------------"""
 parser = argparse.ArgumentParser(description='AlphaPose Demo')
@@ -195,6 +196,8 @@ if __name__ == "__main__":
         'pt': [],
         'pn': []
     }
+
+    jiushicomm = jiushicommunication().start()
 
     # Init data writer
     queueSize = 2 if mode == 'webcam' else args.qsize

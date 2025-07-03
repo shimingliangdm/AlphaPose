@@ -152,8 +152,9 @@ class DataWriter():
         print(response.json())
 
     def TellJiuShiSound(self):
-        randInt = random.randrange(0, 5)
-        randSound = Sounds[randInt]
+        #randInt = random.randrange(0, 5)
+        #randSound = Sounds[randInt]
+        randSound = "请选择货品"
         url = "https://gateway.zelostech.com.cn/business-server/open-apis/vehicle/sound_and_show"
         body = {
             "vehicleName": "ZL01351",
@@ -204,6 +205,40 @@ class DataWriter():
         print(response.status_code)
         print(response.json())
 
+    def TellJiuShiCommandStopSide(self):
+        url = "https://gateway.zelostech.com.cn/business-server/open-apis/vehicle/command"
+        body = {
+            "vehicleName": "ZL01351",
+            "commandType": "BUSINESS_ONE_KEY_SIDE",
+            "userId": "15",
+            "userName": "testUser",
+            "source": "34b5c696d54941e217938c590d45b598"
+        }
+
+        headers = {"Content-Type": "application/json", 
+            "token":self.jiushiToken
+        }
+        response = requests.post(url, data=json.dumps(body), headers=headers)
+        print(response.status_code)
+        print(response.json())
+
+    def TellJiuShiCommandRecoverySide(self):
+        url = "https://gateway.zelostech.com.cn/business-server/open-apis/vehicle/command"
+        body = {
+            "vehicleName": "ZL01351",
+            "commandType": "BUSINESS_TASK_RECOVERY",
+            "userId": "15",
+            "userName": "testUser",
+            "source": "34b5c696d54941e217938c590d45b598"
+        }
+
+        headers = {"Content-Type": "application/json", 
+            "token":self.jiushiToken
+        }
+        response = requests.post(url, data=json.dumps(body), headers=headers)
+        print(response.status_code)
+        print(response.json())
+
     def update(self):
         final_result = []
         norm_type = self.cfg.LOSS.get('NORM_TYPE', None)
@@ -220,8 +255,8 @@ class DataWriter():
                 stream = cv2.VideoWriter(*[self.video_save_opt[k] for k in ['savepath', 'fourcc', 'fps', 'frameSize']])
             assert stream.isOpened(), 'Cannot open video for writing'
         # keep looping infinitelyd
-        #self.GetJiuShiToken()
-        #self.TellJiuShiInitCommandSound()
+        self.GetJiuShiToken()
+        self.TellJiuShiInitCommandSound()
         while True:
             #self.GetJiuShiToken()
 
@@ -235,7 +270,7 @@ class DataWriter():
                     if self.accStopTime >= JiuShiStopTime:
                         # which means it has excceeded max waiting time
                         print("trigger recovery")
-                        #self.TellJiuShiRecovery()
+                        self.TellJiuShiCommandRecoverySide()
                         self.accStopTime = 0.0
                         self.accCommonSoundTime = 0.0
                         self.isStopping = False
@@ -249,15 +284,15 @@ class DataWriter():
                     if self.accCommonSoundTime >= JiuShiCommonSoundTime:
                         # which means it has excceeded max waiting time
                         print("trigger command sound")
-                        #self.TellJiuShiCommandSound()
+                        self.TellJiuShiCommandSound()
                         self.accCommonSoundTime = 0.0
                 self.lastRecordTime = curTime
 
             if self.stopSignal:
                 if self.isStopping == False:
                     print("trigger stop")
-                    #self.TellJiuShiStop()
-                    #self.TellJiuShiSound()
+                    self.TellJiuShiCommandStopSide()
+                    self.TellJiuShiSound()
                 self.isStopping = True
                 self.accStopTime = 0.0
                 self.stopSignal = False
