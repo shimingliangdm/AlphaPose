@@ -42,6 +42,7 @@ class jiushicommunication():
         self.accCommonSoundTime = 0.0
         #self.stopSignal = False
         self.stop_signal_queue = mp.Queue(maxsize = 100000)
+        self.recover_signal_queue = mp.Queue(maxsize = 100000)
 
     def start_worker(self, target):
         #if self.opt.sp:
@@ -216,6 +217,23 @@ class jiushicommunication():
 
     def clear_stop_signals(self):
         self.clear()
+
+
+    def put_recover_signal(self):
+        self.wait_put_recover_signal()
+
+    def wait_put_recover_signal(self):
+        self.recover_signal_queue.put(True)
+
+    def get_recover_signal(self):
+        return self.recover_signal_queue.qsize()
+
+    def clear_recover_signal(self):
+        while not self.recover_signal_queue.empty():
+            self.recover_signal_queue.get()
+
+    def clear_recover_signals(self):
+        self.clear_recover_signal()
 
     def update(self):
         # keep looping infinitelyd
