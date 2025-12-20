@@ -38,13 +38,14 @@ class DataWriter():
         self.heatmap_to_coord = get_func_heatmap_to_coord(cfg)
         self.camera_idx = inCameraIndex
 
-        self.stopSignal = False
         # initialize the queue used to store frames read from
         # the video file
         if opt.sp:
             self.result_queue = Queue(maxsize=queueSize)
+            self.stop_signal_queue = Queue(maxsize = 100000)
         else:
             self.result_queue = mp.Queue(maxsize=queueSize)
+            self.stop_signal_queue = mp.Queue(maxsize = 100000)
 
         if opt.save_img:
             if not os.path.exists(opt.outputpath + '/vis'):
@@ -100,8 +101,6 @@ class DataWriter():
                 stream = cv2.VideoWriter(*[self.video_save_opt[k] for k in ['savepath', 'fourcc', 'fps', 'frameSize']])
             assert stream.isOpened(), 'Cannot open video for writing'
         # keep looping infinitelyd
-        self.GetJiuShiToken()
-        self.TellJiuShiInitCommandSound()
         while True:
             #self.GetJiuShiToken()
 
@@ -203,29 +202,29 @@ class DataWriter():
                             len13 = np.linalg.norm(v13)
                             len24 = np.linalg.norm(v24)
                             if len018 > 65:
-                                #print("which means some is closed")
-                                self.stopSignal = True
+                                #print("which means some is closed ********************")
+                                self.put_stop_signal()
 
                             # len018 to tell global distance
                             # len12 to tell partial facial direction
                             if len018 > 25 and len018 / len12 < 2:
                                 ratio = len018 / len12
-                                #print("someone is closed and look: " + str(ratio))
-                                self.stopSignal = True
+                                #print("someone is closed and look:  ********************" + str(ratio))
+                                self.put_stop_signal()
 
                         if (conf5 > 0.4 and conf7 > 0.4):
                             v75 = [x7 - x5, y7 - y5]
                             len75 = np.linalg.norm(v75)
                             if len75 > 25 and y9 < y5:
-                                #print("someone is waving left hand")
-                                self.stopSignal = True
+                                #print("someone is waving left hand  ********************")
+                                self.put_stop_signal()
 
                         if (conf6 > 0.4 and conf8 > 0.4):
                             v86 = [x8 - x6, y8 - y6]
                             len86 = np.linalg.norm(v86)
                             if len86 > 25 and y10 < y6:
-                                #print("someone is waving right hand")
-                                self.stopSignal = True
+                                #print("someone is waving right hand  ********************")
+                                self.put_stop_signal()
 
 
                     _result.append(
@@ -264,6 +263,20 @@ class DataWriter():
                         from alphapose.utils.vis import vis_frame
                     img = vis_frame(orig_img, result, self.opt, self.vis_thres)
                     self.write_image(img, im_name, stream=stream if self.save_video else None)
+
+
+
+    def put_stop_signal(self):
+        self.wait_put_stop_signal()
+
+    def wait_put_stop_signal(self):
+        self.stop_signal_queue.put(True)
+
+    def get_stop_signal(self):
+        return self.stop_signal_queue.qsize()
+
+    def clear_stop_signals(self):
+        self.clear(self.stop_signal_queue)
 
     def write_image(self, img, im_name, stream=None):
         if self.opt.vis:

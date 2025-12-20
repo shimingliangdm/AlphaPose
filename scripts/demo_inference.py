@@ -264,9 +264,9 @@ if __name__ == "__main__":
                         boxes,scores,ids,hm,cropped_boxes = track(tracker,args,orig_img,inps,boxes,hm,cropped_boxes,im_name,scores)
                     hm = hm.cpu()
                     writer_0.save(boxes, scores, ids, hm, cropped_boxes, orig_img, im_name, 0)
-                    if writer_0.stopSignal == True:
-                        jiushicommunication.stopSignal = True
-                        writer_0.stopSignal = False
+                    if writer_0.get_stop_signal() > 0:
+                        jiushicomm.put_stop_signal()
+                        writer_0.clear_stop_signals()
                     if args.profile:
                         ckpt_time, post_time = getTime(ckpt_time)
                         runtime_profile['pn'].append(post_time)
@@ -307,9 +307,9 @@ if __name__ == "__main__":
                         boxes,scores,ids,hm,cropped_boxes = track(tracker,args,orig_img,inps,boxes,hm,cropped_boxes,im_name,scores)
                     hm = hm.cpu()
                     writer_1.save(boxes, scores, ids, hm, cropped_boxes, orig_img, im_name, 1)
-                    if writer_1.stopSignal == True:
-                        jiushicommunication.stopSignal = True
-                        writer_1.stopSignal = False
+                    if writer_1.get_stop_signal() > 0:
+                        jiushicomm.put_stop_signal()
+                        writer_1.clear_stop_signals()
                     if args.profile:
                         ckpt_time, post_time = getTime(ckpt_time)
                         runtime_profile['pn'].append(post_time)

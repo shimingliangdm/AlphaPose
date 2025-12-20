@@ -27,10 +27,10 @@ EVAL_JOINTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 
 JiuShiTokenExpireTime = 10000
 JiuShiStopTime = 5
-JiuShiCommonSoundTime = 2
+JiuShiCommonSoundTime = 8
 
 Sounds = ["买一个啦", "天气太热，买瓶可乐", "别看了，买一个吧", "好东西就得买", "我有好吃的，也有好喝的"]
-CommandSounds = ["我是一台售货车哦", "我有零食", "我有可乐"]
+non_stop_sounds = ["我是无人售货车，我有零食和可乐"]
 
 class jiushicommunication():
     def __init__(self, ):
@@ -40,13 +40,15 @@ class jiushicommunication():
         self.isStopping = False
         self.accStopTime = 0.0
         self.accCommonSoundTime = 0.0
-        self.stopSignal = False
+        #self.stopSignal = False
+        self.stop_signal_queue = mp.Queue(maxsize = 100000)
 
     def start_worker(self, target):
-        if self.opt.sp:
-            p = Thread(target=target, args=())
-        else:
-            p = mp.Process(target=target, args=())
+        #if self.opt.sp:
+        #    p = Thread(target=target, args=())
+        #else:
+        #    p = mp.Process(target=target, args=())
+        p = mp.Process(target=target, args=())
         # p.daemon = True
         p.start()
         return p
@@ -91,8 +93,8 @@ class jiushicommunication():
             "token":self.jiushiToken
         }
         response = requests.post(url, data=json.dumps(body), headers=headers)
-        print(response.status_code)
-        print(response.json())
+        #print(response.status_code)
+        #print(response.json())
 
     def TellJiuShiRecovery(self):
         url = "https://gateway.zelostech.com.cn/business-server/open-apis/vehicle/command"
@@ -108,13 +110,13 @@ class jiushicommunication():
             "token":self.jiushiToken
         }
         response = requests.post(url, data=json.dumps(body), headers=headers)
-        print(response.status_code)
-        print(response.json())
+        #print(response.status_code)
+        #print(response.json())
 
     def TellJiuShiSound(self):
         #randInt = random.randrange(0, 5)
         #randSound = Sounds[randInt]
-        randSound = "请选择货品"
+        randSound = "请选购货品"
         url = "https://gateway.zelostech.com.cn/business-server/open-apis/vehicle/sound_and_show"
         body = {
             "vehicleName": "ZL01351",
@@ -127,8 +129,8 @@ class jiushicommunication():
             "token":self.jiushiToken
         }
         response = requests.post(url, data=json.dumps(body), headers=headers)
-        print(response.status_code)
-        print(response.json())
+        #print(response.status_code)
+        #print(response.json())
 
     def TellJiuShiInitCommandSound(self):
         sound = "图像识别已开启"
@@ -144,12 +146,12 @@ class jiushicommunication():
             "token":self.jiushiToken
         }
         response = requests.post(url, data=json.dumps(body), headers=headers)
-        print(response.status_code)
-        print(response.json())
+        #print(response.status_code)
+        #print(response.json())
 
-    def TellJiuShiCommandSound(self):
-        randInt = random.randrange(0, 3)
-        randSound = CommandSounds[randInt]
+    def TellJiuShiNonStopSound(self):
+        randInt = random.randrange(0, 1)
+        randSound = non_stop_sounds[randInt]
         url = "https://gateway.zelostech.com.cn/business-server/open-apis/vehicle/sound_and_show"
         body = {
             "vehicleName": "ZL01351",
@@ -162,8 +164,8 @@ class jiushicommunication():
             "token":self.jiushiToken
         }
         response = requests.post(url, data=json.dumps(body), headers=headers)
-        print(response.status_code)
-        print(response.json())
+        #print(response.status_code)
+        #print(response.json())
 
     def TellJiuShiCommandStopSide(self):
         url = "https://gateway.zelostech.com.cn/business-server/open-apis/vehicle/command"
@@ -179,8 +181,8 @@ class jiushicommunication():
             "token":self.jiushiToken
         }
         response = requests.post(url, data=json.dumps(body), headers=headers)
-        print(response.status_code)
-        print(response.json())
+        #print(response.status_code)
+        #print(response.json())
 
     def TellJiuShiCommandRecoverySide(self):
         url = "https://gateway.zelostech.com.cn/business-server/open-apis/vehicle/command"
@@ -196,8 +198,24 @@ class jiushicommunication():
             "token":self.jiushiToken
         }
         response = requests.post(url, data=json.dumps(body), headers=headers)
-        print(response.status_code)
-        print(response.json())
+        #print(response.status_code)
+        #print(response.json())
+
+    def put_stop_signal(self):
+        self.wait_put_stop_signal()
+
+    def wait_put_stop_signal(self):
+        self.stop_signal_queue.put(True)
+
+    def get_stop_signal(self):
+        return self.stop_signal_queue.qsize()
+
+    def clear(self):
+        while not self.stop_signal_queue.empty():
+            self.stop_signal_queue.get()
+
+    def clear_stop_signals(self):
+        self.clear()
 
     def update(self):
         # keep looping infinitelyd
@@ -215,7 +233,7 @@ class jiushicommunication():
                     if self.accStopTime >= JiuShiStopTime:
                         # which means it has excceeded max waiting time
                         print("trigger recovery")
-                        self.TellJiuShiCommandRecoverySide()
+                        self.TellJiuShiRecovery()
                         self.accStopTime = 0.0
                         self.accCommonSoundTime = 0.0
                         self.isStopping = False
@@ -229,18 +247,19 @@ class jiushicommunication():
                     if self.accCommonSoundTime >= JiuShiCommonSoundTime:
                         # which means it has excceeded max waiting time
                         print("trigger command sound")
-                        self.TellJiuShiCommandSound()
+                        self.TellJiuShiNonStopSound()
                         self.accCommonSoundTime = 0.0
                 self.lastRecordTime = curTime
 
-            if self.stopSignal:
+            if self.stop_signal_queue.qsize() > 0:
                 if self.isStopping == False:
-                    print("trigger stop")
-                    self.TellJiuShiCommandStopSide()
+                    print("trigger stop !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1")
+                    self.TellJiuShiStop()
                     self.TellJiuShiSound()
                 self.isStopping = True
                 self.accStopTime = 0.0
-                self.stopSignal = False
+                self.clear_stop_signals()
+                #self.stopSignal = False
                 self.accCommonSoundTime = 0.0
 
     
